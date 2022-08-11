@@ -25,7 +25,6 @@ def student_factory():
 @pytest.mark.django_db
 def test_oneCourse(client, course_factory):
 
-    course_first = Course.objects.first()
     course = course_factory(_quantity = 5)
 
     response = client.get('/api/v1/courses/4/')
