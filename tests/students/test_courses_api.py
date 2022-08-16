@@ -2,6 +2,7 @@ import pytest
 from rest_framework.test import APIClient
 from model_bakery import baker
 
+from django_testing import settings
 from students.models import Course, Student
 
 
@@ -21,18 +22,23 @@ def student_factory():
         return baker.make(Student, *args, **kwargs)
     return factory
 
-###проверка получения 1го курса
+# @pytest.fixture
+# def test_settings():
+#     settings.MAX_STUDENTS_PER_COURSE = True
+
 @pytest.mark.django_db
 def test_oneCourse(client, course_factory):
 
+
     course = course_factory(_quantity = 5)
 
-    response = client.get('/api/v1/courses/4/')
+    for i in course:
 
-    assert response.json()['id'] == 4
+        response = client.get('/api/v1/courses/'+str(i.id)+'/')
+
+        assert response.json()['id'] == int(i.id)
 
 
-#### проверка получения списка курсов
 @pytest.mark.django_db
 def test_listCourse(client, course_factory):
 
@@ -40,85 +46,108 @@ def test_listCourse(client, course_factory):
 
     response = client.get('/api/v1/courses/')
 
-    assert len(response.json()) == 5
+    assert len(response.json()) == len(course)
 
-###тест успешного создания курса
 @pytest.mark.django_db
-def test_createCourse(client):
+def test_createCourse(client, course_factory):
+
+    course = course_factory(_quantity=5)
+
+    for i in course:
+
+        base = Course.objects.count()
+
+        response = client.post('/api/v1/courses/', data={'name': i.name})
+
+        assert response.json()['name'] == i.name
+        assert response.status_code == 201
+        assert Course.objects.count() == base + 1
+
+@pytest.mark.django_db
+def test_patchCourse(client, course_factory):
+
+    course = course_factory(_quantity=5)
+
+    for i in course:
+
+        response_post = client.post('/api/v1/courses/', data={'name': i.name})
+
+        response_patch = client.patch('/api/v1/courses/'+str(i.id)+'/', data={'name': 'C2'})
+
+        assert response_patch.status_code == 200
+        assert response_patch.json()['name'] == 'C2'
+
+@pytest.mark.django_db
+def test_deleteCourse(client, course_factory):
+
+
+    course = course_factory(_quantity=5)
 
     base = Course.objects.count()
 
-    response = client.post('/api/v1/courses/', data={'name': 'C1', 'students': []})
+    for i in course:
 
-    assert response.status_code == 201
-    assert Course.objects.count() == base + 1
+        response_post = client.post('/api/v1/courses/', data={'name': i.name})
 
-###тест успешного обновления курса
-@pytest.mark.django_db
-def test_patchCourse(client):
+        assert Course.objects.count() == base + 1
 
-    response_post = client.post('/api/v1/courses/', data={'name': 'C1', 'students': []})
-    response_get = client.get('/api/v1/courses/')
+        response_delete = client.delete('/api/v1/courses/'+str(i.id)+'/')
 
-    response_patch = client.patch('/api/v1/courses/12/', data={'name': 'C2'})
+        assert response_delete.status_code == 204
+        assert Course.objects.count() == base
 
-    assert response_patch.status_code == 200
-
-###тест успешного удаления курса
-@pytest.mark.django_db
-def test_deleteCourse(client):
-
-    base = Course.objects.count()
-
-    response_post = client.post('/api/v1/courses/', data={'name': 'C1', 'students': []})
-
-    assert Course.objects.count() == base + 1
-
-    response_delete = client.delete('/api/v1/courses/13/')
-
-    assert response_delete.status_code == 204
-    assert Course.objects.count() == base
-
-###проверка фильтрации списка курсов по id
 @pytest.mark.django_db
 def test_filterIdCourse(client, course_factory):
 
     course = course_factory(_quantity = 6)
 
-    response = client.get('/api/v1/courses/?id=16')
+    for i in course:
 
-    assert response.status_code == 200
+        response = client.get('/api/v1/courses/?id='+str(i.id))
 
-###проверка фильтрации списка курсов по name
+        assert response.status_code == 200
+
 @pytest.mark.django_db
 def test_filterNameCourse(client, course_factory):
 
     course = course_factory(_quantity = 6)
 
-    response = client.get('/api/v1/courses/?name=C2')
+    for i in course:
 
-    assert response.status_code == 200
+        response = client.get('/api/v1/courses/?name='+str(i.name))
 
-###Ограничить число студентов на курсе
-@pytest.mark.django_db
-def test_StudentsNumber(client, course_factory):
+        assert response.status_code == 200
 
-    course = course_factory(_quantity=20)
 
-    # student = student_factory(_quantity = 25)
-
-    response = client.post('/api/v1/courses/', data={'name': course})
-
-    if len(course) > 20:
-
-        for request in response.json()['non_field_errors']:
-
-            assert request == 'Курсов слишком много'
-
-    else:
-
-        assert response.status_code == 201
-
+# def test_StudentsNumber(client, course_factory, student_factory, settings):
+#
+#     courses = course_factory(_quantity=20)
+#
+#     students = student_factory(_quantity = 25)
+#
+#     for course in courses:
+#         course_name = course.name
+#
+#     for student in students:
+#         student_id = student.id
+#
+#     response = client.post('/api/v1/courses/', data={'name': course_name, 'students':student_id})
+#
+#
+#     if len(students) > 20:
+#
+#
+#         # for request in response.json()['non_field_errors']:
+#         for request in response.json():
+#             print(request[id])
+#
+#             # assert request == 'Студентов слишком много'
+#
+#     else:
+#
+#         assert response.status_code == 201
+# #
+#
 
 
 
